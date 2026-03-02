@@ -59,6 +59,7 @@ subprocess.run([
     "tokenizers>=0.19.0",
     "trl>=0.11.0",
     "wandb",
+    "huggingface_hub>=0.24.0",
     "datasketch",
     "langdetect",
     "sentencepiece",
@@ -429,6 +430,139 @@ for prompt in test_prompts:
     print(f"\n🔹 {prompt}")
     print(f"   → {response}")
 
+# ============================================================
+# BÖLÜM 10: HUGGINGFACE HUB'A YÜKLEME
+# ============================================================
+print("\n" + "=" * 60)
+print("🚀 BÖLÜM 10: HuggingFace Hub'a Yükleme")
+print("=" * 60)
+
+# HuggingFace Hub'a yükle (model dosyaları büyük — GitHub 100MB limiti var)
+# Bu sayede modeli istediğiniz yerden indirebilirsiniz
+HF_REPO_ID = "cebrailbagatarhan/turkmodel-350m"  # ← Kendi HF kullanıcı adınızla değiştirin
+
+try:
+    from huggingface_hub import HfApi, login
+    
+    # Colab'da HF token ile giriş
+    # Token almak için: https://huggingface.co/settings/tokens
+    print("📝 HuggingFace Hub'a giriş yapılıyor...")
+    print("   Token yoksa: https://huggingface.co/settings/tokens adresinden alın")
+    
+    try:
+        # Colab'da notebook_login() kullanılabilir
+        from huggingface_hub import notebook_login
+        notebook_login()
+    except Exception:
+        # Token ortam değişkeninden veya cache'den okunur
+        print("   ⚠️ Otomatik giriş deneniyor (HF_TOKEN env veya cache)...")
+    
+    api = HfApi()
+    
+    # Repo oluştur (yoksa)
+    try:
+        api.create_repo(repo_id=HF_REPO_ID, exist_ok=True, repo_type="model")
+        print(f"  ✅ HF repo hazır: https://huggingface.co/{HF_REPO_ID}")
+    except Exception as e:
+        print(f"  ⚠️ Repo oluşturulamadı: {e}")
+    
+    # Model dosyalarını yükle
+    print("📤 Model yükleniyor (bu birkaç dakika sürebilir)...")
+    api.upload_folder(
+        folder_path=MODEL_DIR,
+        repo_id=HF_REPO_ID,
+        repo_type="model",
+        commit_message=f"350M TR-EN LLM - {MAX_STEPS} steps - {elapsed/60:.0f}min on {gpu_name}",
+    )
+    print(f"  ✅ Model yüklendi: https://huggingface.co/{HF_REPO_ID}")
+    print(f"  📥 İndirmek için: git clone https://huggingface.co/{HF_REPO_ID}")
+    
+except Exception as e:
+    print(f"  ⚠️ HuggingFace Hub yükleme atlanıyor: {e}")
+    print("  → Manuel yükleme: huggingface-cli upload cebrailbagatarhan/turkmodel-350m ./final_model")
+
+
+# ============================================================
+# BÖLÜM 11: GİTHUB'A PUSH (Script + Sonuçlar)
+# ============================================================
+print("\n" + "=" * 60)
+print("📦 BÖLÜM 11: GitHub'a Push")
+print("=" * 60)
+
+GITHUB_REPO = "https://github.com/cebrailbagatarhan/turkmodel.git"
+
+try:
+    # Git kurulumu
+    subprocess.run(["git", "config", "--global", "user.email", "colab@train.run"], check=False)
+    subprocess.run(["git", "config", "--global", "user.name", "Colab Training"], check=False)
+    
+    # Repo'yu klonla
+    REPO_DIR = "/content/turkmodel_repo"
+    if os.path.exists(REPO_DIR):
+        import shutil
+        shutil.rmtree(REPO_DIR)
+    
+    subprocess.run(["git", "clone", GITHUB_REPO, REPO_DIR], check=True)
+    
+    # training_info.json ve eval sonuçlarını kopyala (küçük dosyalar)
+    import shutil
+    results_dir = os.path.join(REPO_DIR, "results")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # Training info
+    info_src = os.path.join(MODEL_DIR, "training_info.json")
+    if os.path.exists(info_src):
+        shutil.copy2(info_src, os.path.join(results_dir, "training_info.json"))
+    
+    # Eval sonuçları (varsa)
+    eval_src = os.path.join(MODEL_DIR, "turkish_eval_results.json")
+    if os.path.exists(eval_src):
+        shutil.copy2(eval_src, os.path.join(results_dir, "turkish_eval_results.json"))
+    
+    # README güncelle: model indirme linkini ekle
+    readme_path = os.path.join(REPO_DIR, "llm-8b-tr-en", "TRAINING_RESULTS.md")
+    with open(readme_path, "w", encoding="utf-8") as f:
+        f.write(f"""# Eğitim Sonuçları
+
+## Model Bilgileri
+- **Boyut:** {total_params/1e6:.1f}M parametre
+- **Mimari:** Llama (Dense Transformer)
+- **Eğitim:** {MAX_STEPS} step, {elapsed/60:.1f} dakika
+- **GPU:** {gpu_name}
+- **Final Loss:** {final_loss}
+
+## Modeli İndir
+```bash
+# HuggingFace'den indir (önerilen)
+pip install huggingface_hub
+huggingface-cli download {HF_REPO_ID} --local-dir ./model
+
+# veya Python ile
+from transformers import AutoModelForCausalLM, AutoTokenizer
+model = AutoModelForCausalLM.from_pretrained("{HF_REPO_ID}")
+tokenizer = AutoTokenizer.from_pretrained("{HF_REPO_ID}")
+```
+
+## Google Drive
+Model ayrıca Google Drive'da da kaydedildi:
+`{MODEL_DIR}`
+""")
+    
+    # Git push
+    subprocess.run(["git", "-C", REPO_DIR, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", REPO_DIR, "commit", "-m",
+                     f"Egitim sonuclari - {total_params/1e6:.0f}M model - {MAX_STEPS} steps"],
+                    check=True)
+    subprocess.run(["git", "-C", REPO_DIR, "push"], check=True)
+    
+    print(f"  ✅ GitHub'a push edildi: {GITHUB_REPO}")
+    print(f"  📄 Sonuçlar: results/training_info.json")
+
+except Exception as e:
+    print(f"  ⚠️ GitHub push atlanıyor: {e}")
+    print(f"  → Model Google Drive'da mevcut: {MODEL_DIR}")
+
+
 print("\n" + "=" * 60)
 print("🎉 TAMAMLANDI!")
 print("=" * 60)
@@ -439,9 +573,13 @@ print(f"""
   GPU:       {gpu_name}
   Kaydedildi: {MODEL_DIR}
 
+📥 Modeli İndirme Yolları:
+  1. HuggingFace: https://huggingface.co/{HF_REPO_ID}
+  2. GitHub sonuçları: {GITHUB_REPO}
+  3. Google Drive: {MODEL_DIR}
+
 ⏭️ Sonraki Adımlar:
-  1. Modeli HuggingFace Hub'a yükleyebilirsiniz
+  1. SFT (Supervised Fine-Tuning) yapabilirsiniz
   2. Daha fazla veri ile eğitime devam edebilirsiniz
-  3. SFT (Supervised Fine-Tuning) yapabilirsiniz
-  4. Daha büyük model (1B, 8B) için aynı pipeline'ı kullanın
+  3. Daha büyük model (1B, 8B) için aynı pipeline'ı kullanın
 """)

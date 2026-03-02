@@ -23,6 +23,7 @@ pyarrow>=14.0.0
 
 # Eğitim Takibi
 wandb>=0.16.0
+huggingface_hub>=0.24.0
 
 # Değerlendirme
 rouge-score>=0.1.2
