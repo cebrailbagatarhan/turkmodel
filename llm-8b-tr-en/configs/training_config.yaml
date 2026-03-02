@@ -1,38 +1,37 @@
 # training_config.yaml — 2 Saat H100 Eğitim Konfigürasyonu
 # ============================================================
-# Bu dosya 350M model + 2 saat H100 süresine göre optimize edilmiştir.
-# 8B model için değerleri _8b_reference altında bulabilirsiniz.
+# ~6B model + 400 iterasyon + 8-bit Adam ile H100 80GB'ye optimize
+# Overfit'i önlemek için 300-400 step yeterli
 # ============================================================
 
 model:
   type: "llama"
-  size: "350M"
-  vocab_size: 32000
-  hidden_size: 1024
-  intermediate_size: 4096
-  num_hidden_layers: 24
-  num_attention_heads: 16
-  num_key_value_heads: 4
+  size: "~6B"
+  vocab_size: 50257
+  hidden_size: 4096
+  intermediate_size: 11008
+  num_hidden_layers: 32
+  num_attention_heads: 32
+  num_key_value_heads: 8
   max_position_embeddings: 2048
   dtype: "bfloat16"
   flash_attention: true
 
 training:
-  # 2 saat H100'de ~500M-1B token işlenebilir
-  max_steps: 5000
-  per_device_train_batch_size: 16
-  gradient_accumulation_steps: 8
-  # Efektif batch: 16 * 8 * 2048 = ~262K token/adım
-  # 5000 adım * 262K = ~1.3B token
+  max_steps: 400                   # 300-400 yeterli, fazlası overfit yapar
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  # Efektif batch: 4 * 4 * 2048 = ~32K token/adım
+  # 400 adım * 32K = ~13M token
   
-  learning_rate: 6.0e-4          # Küçük model → daha yüksek LR
+  learning_rate: 3.0e-4            # 6-7B model için standart LR
   lr_scheduler_type: "cosine"
-  warmup_steps: 500
-  min_lr: 6.0e-5
+  warmup_steps: 40
+  min_lr: 3.0e-5
   weight_decay: 0.1
   max_grad_norm: 1.0
   
-  optimizer: "adamw_torch_fused"
+  optimizer: "adamw_bnb_8bit"      # 8-bit Adam — VRAM tasarrufu
   adam_beta1: 0.9
   adam_beta2: 0.95
   adam_epsilon: 1.0e-8
@@ -42,11 +41,11 @@ training:
   gradient_checkpointing: true
   
   logging_steps: 10
-  eval_steps: 500
-  save_steps: 500
+  eval_steps: 100
+  save_steps: 100
   save_total_limit: 5
   
-  dataloader_num_workers: 4
+  dataloader_num_workers: 2
   dataloader_pin_memory: true
   seq_length: 2048
 
@@ -55,15 +54,11 @@ data:
     turkish: 0.40
     english: 0.55
     code: 0.05
-  total_tokens_target: "1B"
+  total_tokens_target: "13M"
 
-# 8B model referans değerleri (orijinal plan)
-_8b_reference:
-  max_steps: 50000
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 128
-  learning_rate: 3.0e-4
-  warmup_steps: 2000
-  seq_length: 4096
-  total_tokens_target: "100B"
-  estimated_time: "60-80 gün (tek H100)"
+memory_estimate:
+  bf16_weights: "~12.2 GB"
+  gradients: "~12.2 GB"
+  optimizer_8bit: "~12.2 GB"
+  activations_with_checkpointing: "~5-8 GB"
+  total: "~42 GB / 80 GB H100"

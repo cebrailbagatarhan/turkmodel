@@ -1,15 +1,14 @@
 {
-    "_comment": "350M Dense Transformer — 2 saat H100 için ölçeklendirilmiş versiyon",
+    "_comment": "~6B Dense Transformer — Llama-2-7B tabanlı, GQA ile H100 80GB'ye optimize",
     "_original_target": "8B Dense (Llama-3 tabanlı) — tam eğitim için",
-    
     "model_type": "llama",
-    "vocab_size": 32000,
-    "hidden_size": 1024,
-    "intermediate_size": 4096,
-    "num_hidden_layers": 24,
-    "num_attention_heads": 16,
-    "num_key_value_heads": 4,
-    "head_dim": 64,
+    "vocab_size": 50257,
+    "hidden_size": 4096,
+    "intermediate_size": 11008,
+    "num_hidden_layers": 32,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 8,
+    "head_dim": 128,
     "max_position_embeddings": 2048,
     "rope_theta": 500000.0,
     "rope_scaling": null,
@@ -18,21 +17,17 @@
     "tie_word_embeddings": false,
     "torch_dtype": "bfloat16",
     "attn_implementation": "flash_attention_2",
-    
     "_param_estimate": {
-        "embedding": "32000 * 1024 = ~33M",
-        "per_layer": "~11M (24 layers = ~264M)",
-        "lm_head": "~33M",
-        "total": "~350M parametre"
+        "per_layer": "~177M (32 layers = ~5.67B)",
+        "embedding": "50257 * 4096 = ~206M",
+        "lm_head": "~206M",
+        "total": "~6.08B parametre"
     },
-    
-    "_8b_config_for_reference": {
-        "vocab_size": 130000,
-        "hidden_size": 4096,
-        "intermediate_size": 14336,
-        "num_hidden_layers": 32,
-        "num_attention_heads": 32,
-        "num_key_value_heads": 8,
-        "max_position_embeddings": 8192
+    "_memory_estimate": {
+        "bf16_weights": "~12.2 GB",
+        "8bit_adam_states": "~12.2 GB",
+        "gradients_bf16": "~12.2 GB",
+        "total_no_activations": "~36.6 GB",
+        "with_gradient_checkpointing": "~42 GB (H100 80GB'ye rahat sığar)"
     }
 }

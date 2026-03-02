@@ -4,7 +4,7 @@ colab_setup.py — Google Colab H100 Tam Kurulum & Eğitim Script'i
 Bu dosyayı doğrudan Colab'da çalıştırabilir veya hücrelere bölerek
 notebook olarak kullanabilirsiniz.
 
-⏰ HEDEF: 2 saat H100 ile 350M parametre model eğitimi
+⏰ HEDEF: 2 saat H100 ile ~6B parametre model eğitimi
 📊 ÇIKTI: Sıfırdan eğitilmiş Türkçe+İngilizce LLM
 
 Colab'da kullanım:
@@ -64,6 +64,7 @@ subprocess.run([
     "datasketch",
     "langdetect",
     "sentencepiece",
+    "bitsandbytes>=0.43.0",
 ], check=True)
 
 # Flash Attention (ayrı kur, build gerekebilir)
@@ -250,14 +251,14 @@ try:
 except ImportError:
     attn_impl = "sdpa"
 
-# 350M model konfigürasyonu
+# ~6B model konfigürasyonu (Llama-2-7B tabanlı, GQA)
 config = LlamaConfig(
     vocab_size=VOCAB_SIZE,
-    hidden_size=1024,
-    intermediate_size=4096,
-    num_hidden_layers=24,
-    num_attention_heads=16,
-    num_key_value_heads=4,
+    hidden_size=4096,
+    intermediate_size=11008,
+    num_hidden_layers=32,
+    num_attention_heads=32,
+    num_key_value_heads=8,
     max_position_embeddings=SEQ_LENGTH,
     rope_theta=500000.0,
     hidden_act="silu",
@@ -278,7 +279,7 @@ print(f"  Attention: {attn_impl}")
 
 # VRAM tahmini
 param_mem = total_params * 2 / 1e9  # BF16 = 2 byte
-optim_mem = total_params * 8 / 1e9  # AdamW states
+optim_mem = total_params * 2 / 1e9  # 8-bit Adam states
 print(f"  VRAM tahmini: ~{param_mem + optim_mem:.1f} GB (model + optimizer)")
 
 
@@ -294,11 +295,10 @@ import time
 import math
 
 # Eğitim süresi tahmini
-BATCH_SIZE = 16
-GRAD_ACCUM = 8
+BATCH_SIZE = 4
+GRAD_ACCUM = 4
 effective_batch_tokens = BATCH_SIZE * GRAD_ACCUM * SEQ_LENGTH
-max_possible_steps = min(5000, total_tokens // effective_batch_tokens + 1)
-MAX_STEPS = max(500, max_possible_steps)
+MAX_STEPS = 400  # 300-400 iterasyon yeterli, fazlası overfit yapar
 
 print(f"  Efektif batch: {effective_batch_tokens:,} token")
 print(f"  Max steps: {MAX_STEPS:,}")
@@ -311,9 +311,9 @@ training_args = TrainingArguments(
     per_device_train_batch_size=BATCH_SIZE,
     gradient_accumulation_steps=GRAD_ACCUM,
     
-    learning_rate=6e-4,
+    learning_rate=3e-4,
     lr_scheduler_type="cosine",
-    warmup_steps=min(500, MAX_STEPS // 10),
+    warmup_steps=40,
     weight_decay=0.1,
     max_grad_norm=1.0,
     
@@ -324,19 +324,19 @@ training_args = TrainingArguments(
     
     logging_steps=10,
     logging_first_step=True,
-    save_steps=max(100, MAX_STEPS // 10),
+    save_steps=100,
     save_total_limit=5,
     eval_strategy="steps",
-    eval_steps=max(100, MAX_STEPS // 10),
+    eval_steps=100,
     
     report_to="none",  # WandB istenirse "wandb" yapın
-    run_name="llm-350m-tr-en-2h",
+    run_name="llm-6b-tr-en-2h",
     
     dataloader_num_workers=2,
     dataloader_pin_memory=True,
     remove_unused_columns=False,
     
-    optim="adamw_torch_fused",
+    optim="adamw_bnb_8bit",
     adam_beta1=0.9,
     adam_beta2=0.95,
     adam_epsilon=1e-8,
@@ -445,7 +445,7 @@ print("=" * 60)
 
 # HuggingFace Hub'a yükle (model dosyaları büyük — GitHub 100MB limiti var)
 # Bu sayede modeli istediğiniz yerden indirebilirsiniz
-HF_REPO_ID = "cebrailbagatarhan/turkmodel-350m"  # ← Kendi HF kullanıcı adınızla değiştirin
+HF_REPO_ID = "cebrailbagatarhan/turkmodel-6b"  # ← Kendi HF kullanıcı adınızla değiştirin
 
 try:
     from huggingface_hub import HfApi, login
@@ -477,7 +477,7 @@ try:
     
 except Exception as e:
     print(f"  ⚠️ HuggingFace Hub yükleme atlanıyor: {e}")
-    print("  → Manuel yükleme: huggingface-cli upload cebrailbagatarhan/turkmodel-350m ./final_model")
+    print("  → Manuel yükleme: huggingface-cli upload cebrailbagatarhan/turkmodel-6b ./final_model")
 
 
 # ============================================================
