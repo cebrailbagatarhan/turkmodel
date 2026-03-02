@@ -1,0 +1,9 @@
+{
+  "model_size": "6082.7M",
+  "total_params": 6082670592,
+  "training_steps": 400,
+  "training_time_minutes": 66.01829282840093,
+  "total_tokens_processed": 13107200,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "final_loss": 4.787360000610351
+}
