@@ -60,6 +60,7 @@ subprocess.run([
     "trl>=0.11.0",
     "wandb",
     "huggingface_hub>=0.24.0",
+    "kagglehub",
     "datasketch",
     "langdetect",
     "sentencepiece",
@@ -77,6 +78,11 @@ except ImportError:
     ])
 
 print("✅ Tüm kütüphaneler kuruldu!")
+
+# Kaggle API ayarları
+os.environ["KAGGLE_USERNAME"] = "cebrailbagatarhan"
+os.environ["KAGGLE_KEY"] = "44c18f944ddc36d2fe6bf50f2ba6b129"
+print("✅ Kaggle API ayarlandı")
 
 
 # ============================================================
