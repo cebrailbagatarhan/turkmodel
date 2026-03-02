@@ -444,18 +444,10 @@ HF_REPO_ID = "cebrailbagatarhan/turkmodel-350m"  # ← Kendi HF kullanıcı adı
 try:
     from huggingface_hub import HfApi, login
     
-    # Colab'da HF token ile giriş
-    # Token almak için: https://huggingface.co/settings/tokens
+    # HuggingFace token ile otomatik giriş
+    HF_TOKEN = "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"
     print("📝 HuggingFace Hub'a giriş yapılıyor...")
-    print("   Token yoksa: https://huggingface.co/settings/tokens adresinden alın")
-    
-    try:
-        # Colab'da notebook_login() kullanılabilir
-        from huggingface_hub import notebook_login
-        notebook_login()
-    except Exception:
-        # Token ortam değişkeninden veya cache'den okunur
-        print("   ⚠️ Otomatik giriş deneniyor (HF_TOKEN env veya cache)...")
+    login(token=HF_TOKEN)
     
     api = HfApi()
     
@@ -489,14 +481,15 @@ print("\n" + "=" * 60)
 print("📦 BÖLÜM 11: GitHub'a Push")
 print("=" * 60)
 
-GITHUB_REPO = "https://github.com/cebrailbagatarhan/turkmodel.git"
+GITHUB_TOKEN = "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"
+GITHUB_REPO = f"https://{GITHUB_TOKEN}@github.com/cebrailbagatarhan/turkmodel.git"
 
 try:
     # Git kurulumu
-    subprocess.run(["git", "config", "--global", "user.email", "colab@train.run"], check=False)
-    subprocess.run(["git", "config", "--global", "user.name", "Colab Training"], check=False)
+    subprocess.run(["git", "config", "--global", "user.email", "cebrailbagatarhan@users.noreply.github.com"], check=False)
+    subprocess.run(["git", "config", "--global", "user.name", "cebrailbagatarhan"], check=False)
     
-    # Repo'yu klonla
+    # Repo'yu klonla (token ile auth)
     REPO_DIR = "/content/turkmodel_repo"
     if os.path.exists(REPO_DIR):
         import shutil
