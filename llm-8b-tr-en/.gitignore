@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Veri dosyaları (çok büyük — GitHub'a yüklenmez)
+data/raw_dataset/
+data/cleaned_dataset/
+data/deduped_dataset/
+data/tokenized_dataset/
+data/corpus/
+*.arrow
+*.parquet
+
+# Model checkpoint'ları (çok büyük)
+checkpoints/
+output/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Tokenizer çıktıları (eğitim sonrası)
+tokenizer/tokenizer.json
+
+# WandB
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Ortam
+.env
+*.log

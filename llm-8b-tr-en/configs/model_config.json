@@ -1,0 +1,38 @@
+{
+    "_comment": "350M Dense Transformer — 2 saat H100 için ölçeklendirilmiş versiyon",
+    "_original_target": "8B Dense (Llama-3 tabanlı) — tam eğitim için",
+    
+    "model_type": "llama",
+    "vocab_size": 32000,
+    "hidden_size": 1024,
+    "intermediate_size": 4096,
+    "num_hidden_layers": 24,
+    "num_attention_heads": 16,
+    "num_key_value_heads": 4,
+    "head_dim": 64,
+    "max_position_embeddings": 2048,
+    "rope_theta": 500000.0,
+    "rope_scaling": null,
+    "hidden_act": "silu",
+    "rms_norm_eps": 1e-05,
+    "tie_word_embeddings": false,
+    "torch_dtype": "bfloat16",
+    "attn_implementation": "flash_attention_2",
+    
+    "_param_estimate": {
+        "embedding": "32000 * 1024 = ~33M",
+        "per_layer": "~11M (24 layers = ~264M)",
+        "lm_head": "~33M",
+        "total": "~350M parametre"
+    },
+    
+    "_8b_config_for_reference": {
+        "vocab_size": 130000,
+        "hidden_size": 4096,
+        "intermediate_size": 14336,
+        "num_hidden_layers": 32,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 8,
+        "max_position_embeddings": 8192
+    }
+}
