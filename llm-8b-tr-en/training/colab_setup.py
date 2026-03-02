@@ -79,6 +79,8 @@ except ImportError:
 
 print("✅ Tüm kütüphaneler kuruldu!")
 
+import os
+
 # Kaggle API ayarları
 os.environ["KAGGLE_USERNAME"] = "cebrailbagatarhan"
 os.environ["KAGGLE_KEY"] = "44c18f944ddc36d2fe6bf50f2ba6b129"
@@ -91,8 +93,6 @@ print("✅ Kaggle API ayarlandı")
 print("\n" + "=" * 60)
 print("💾 BÖLÜM 3: Google Drive Bağlantısı")
 print("=" * 60)
-
-import os
 
 try:
     from google.colab import drive
