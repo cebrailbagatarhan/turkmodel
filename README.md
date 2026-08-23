@@ -40,7 +40,7 @@ Kaynak: [`results/training_info.json`](results/training_info.json). Türetilen d
 | Peak VRAM | Kaydedilmedi | H100 kapasitesi peak kullanım değildir |
 | Eval loss / eval perplexity | Kaydedilmedi | Kalite karşılaştırması yapılamaz |
 
-Bu koşu yaklaşık **2.15 token/parametre** görmüştür. Bu nedenle model boyutuna göre çok kısa bir smoke/PoC koşusudur; kullanılabilir dil modeli kalitesi iddiası için yeterli değildir.
+Bu koşu yaklaşık **0.00215 eğitim tokenı/parametre** görmüştür (`13.1M / 6.08B`). Bu nedenle model boyutuna göre son derece kısa bir smoke/PoC koşusudur; kullanılabilir dil modeli kalitesi iddiası için yeterli değildir.
 
 ## Mimari
 
@@ -57,7 +57,7 @@ Kaydedilmiş koşu ve [`model_config.json`](llm-8b-tr-en/configs/model_config.js
 | KV head | 8 (GQA) |
 | Context | 2,048 |
 | Precision | BF16 |
-| Attention backend | FlashAttention 2 olarak yapılandırılmış |
+| Attention backend | FlashAttention 2 kurulmuşsa onu, aksi halde PyTorch SDPA'yı seçer |
 | Optimizer | 8-bit AdamW olarak yapılandırılmış |
 
 ## Repo Yapısı
