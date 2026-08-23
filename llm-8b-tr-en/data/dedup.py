@@ -50,15 +50,30 @@ def deduplicate_dataset(
     
     unique_indices = []
     duplicate_count = 0
+    empty_count = 0
+    seen_short_texts = set()
     
     print("🔍 Deduplifikasyon başlıyor...")
     for i, item in enumerate(tqdm(dataset, desc="Kontrol ediliyor")):
         text = item.get("text", "")
+        normalized_text = " ".join(text.lower().split())
+        words = normalized_text.split()
         
-        if len(text.split()) < 10:
+        if not normalized_text:
+            empty_count += 1
             continue
         
-        mh = create_minhash(text, num_perm)
+        # MinHash kısa metinlerde anlamlı 3-gram üretmez. Kısa ve benzersiz
+        # örnekleri koru; yalnızca tam kopyalarını kaldır.
+        if len(words) < 10:
+            if normalized_text in seen_short_texts:
+                duplicate_count += 1
+            else:
+                seen_short_texts.add(normalized_text)
+                unique_indices.append(i)
+            continue
+        
+        mh = create_minhash(normalized_text, num_perm)
         
         # Benzer belge var mı kontrol et
         result = lsh.query(mh)
@@ -80,11 +95,14 @@ def deduplicate_dataset(
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
     unique_dataset.save_to_disk(output_path)
     
-    removed_pct = duplicate_count / original_count * 100 if original_count > 0 else 0
+    removed_count = original_count - len(unique_indices)
+    removed_pct = removed_count / original_count * 100 if original_count > 0 else 0
     print(f"\n📊 Deduplifikasyon Sonuçları:")
     print(f"  Orijinal:  {original_count:,}")
     print(f"  Benzersiz: {len(unique_indices):,}")
-    print(f"  Kaldırılan: {duplicate_count:,} ({removed_pct:.1f}%)")
+    print(f"  Yakın/tam kopya: {duplicate_count:,}")
+    print(f"  Boş belge:       {empty_count:,}")
+    print(f"  Kaldırılan:      {removed_count:,} ({removed_pct:.1f}%)")
     print(f"  Kaydedildi: {output_path}")
     
     return unique_dataset

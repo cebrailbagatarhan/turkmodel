@@ -1,7 +1,7 @@
 """
 create_data_mix.py — Dil Karışım Oranlarını Uygula
 =====================================================
-%40 Türkçe / %55 İngilizce / %5 Kod oranında veri karıştır.
+%80 Türkçe / %15 İngilizce / %5 Kod oranında veri karıştır.
 
 Kullanım:
     python data/create_data_mix.py --input ./data/deduped_dataset --output ./data/mixed_dataset
@@ -12,15 +12,26 @@ import argparse
 import random
 from collections import defaultdict
 
-from datasets import load_from_disk, Dataset, concatenate_datasets
+from datasets import load_from_disk
 
 
 # Hedef karışım oranları
 TARGET_MIX = {
-    "tr": 0.40,     # %40 Türkçe
-    "en": 0.55,     # %55 İngilizce
+    "tr": 0.80,     # %80 Türkçe
+    "en": 0.15,     # %15 İngilizce
     "code": 0.05,   # %5 Kod
 }
+
+
+def validate_mix_ratios(mix_ratios: dict) -> None:
+    """Karışım oranlarının pozitif ve toplamda 1 olduğunu doğrula."""
+    if not mix_ratios:
+        raise ValueError("En az bir karışım oranı verilmelidir")
+    if any(ratio <= 0 for ratio in mix_ratios.values()):
+        raise ValueError("Tüm karışım oranları pozitif olmalıdır")
+    total = sum(mix_ratios.values())
+    if abs(total - 1.0) > 1e-9:
+        raise ValueError(f"Karışım oranları toplamı 1 olmalıdır; alınan: {total}")
 
 
 def create_data_mix(
@@ -34,6 +45,7 @@ def create_data_mix(
     """
     if mix_ratios is None:
         mix_ratios = TARGET_MIX
+    validate_mix_ratios(mix_ratios)
     
     random.seed(seed)
     
@@ -111,8 +123,8 @@ def main():
     parser = argparse.ArgumentParser(description="Dil Karışım Oranları")
     parser.add_argument("--input", type=str, default="./data/deduped_dataset")
     parser.add_argument("--output", type=str, default="./data/mixed_dataset")
-    parser.add_argument("--tr-ratio", type=float, default=0.40)
-    parser.add_argument("--en-ratio", type=float, default=0.55)
+    parser.add_argument("--tr-ratio", type=float, default=0.80)
+    parser.add_argument("--en-ratio", type=float, default=0.15)
     parser.add_argument("--code-ratio", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

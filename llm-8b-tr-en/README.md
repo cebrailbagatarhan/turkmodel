@@ -63,11 +63,15 @@ Manuel akış:
 python data/download_datasets.py --mode quick
 python data/clean_turkish.py --input ./data/raw_dataset --output ./data/cleaned_dataset
 python data/dedup.py --input ./data/cleaned_dataset --output ./data/deduped_dataset
+python data/create_data_mix.py --input ./data/deduped_dataset --output ./data/mixed_dataset
 python tokenizer/train_tokenizer.py --vocab-size 32000
-python data/tokenize_dataset.py --input ./data/deduped_dataset --output ./data/tokenized_dataset
+python data/tokenize_dataset.py \
+  --input ./data/mixed_dataset \
+  --tokenizer ./tokenizer \
+  --output ./data/tokenized_dataset
 ```
 
-`data/tokenize_dataset.py`, gruplanmış sequence'ları `seed=42` ile %95 train / %5 validation olarak ayırır. `colab_setup.py` quick akışı ise GPT-2 tokenizer kullanır ve ayrı bir özel-tokenizer benchmarkı değildir.
+`data/tokenize_dataset.py`, belgeleri önce `seed=42` ile train/validation olarak ayırır; her split'i daha sonra bağımsız tokenize edip paketler. Çıktıdaki `dataset_manifest.json`, tokenizer SHA-256 kimliği ve split ayarlarını kaydeder. Eğitim scripti bu kimliği doğrular ve uyuşmayan tokenizer ile başlamaz. Varsayılan belge karışımı %80 Türkçe, %15 İngilizce ve %5 koddur. `colab_setup.py` quick akışı ise GPT-2 tokenizer kullanır ve ayrı bir özel-tokenizer benchmarkı değildir.
 
 ## Mimari — Kaydedilmiş 6.08B Config
 

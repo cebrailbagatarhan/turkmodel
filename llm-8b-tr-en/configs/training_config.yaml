@@ -1,7 +1,7 @@
 # training_config.yaml — 2 Saat H100 Eğitim Konfigürasyonu
 # ============================================================
 # ~6B model + 400 iterasyon + 8-bit Adam ile H100 80GB'ye optimize
-# Overfit'i önlemek için 300-400 step yeterli
+# 400 step yalnızca pipeline smoke testi içindir; model kalitesi için yeterli değildir
 # ============================================================
 
 model:
@@ -18,7 +18,7 @@ model:
   flash_attention: true
 
 training:
-  max_steps: 400                   # 300-400 yeterli, fazlası overfit yapar
+  max_steps: 400                   # Smoke/PoC bütçesi; üretim eğitimi değildir
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
   # Efektif batch: 4 * 4 * 2048 = ~32K token/adım
@@ -51,10 +51,10 @@ training:
 
 data:
   mix:
-    turkish: 0.40
-    english: 0.55
+    turkish: 0.80
+    english: 0.15
     code: 0.05
-  total_tokens_target: "13M"
+  total_tokens_target: "13M smoke test"
 
 memory_estimate:
   bf16_weights: "~12.2 GB"

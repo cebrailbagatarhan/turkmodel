@@ -17,6 +17,7 @@ Kullanım:
 import os
 import sys
 import json
+import hashlib
 import argparse
 import time
 from datetime import timedelta
@@ -36,6 +37,21 @@ from datasets import load_from_disk
 # ============================================================
 # MODEL KONFİGÜRASYONLARI
 # ============================================================
+
+def tokenizer_fingerprint(tokenizer) -> str:
+    """Tokenizer vocabulary ve ayarlarının SHA-256 kimliğini üret."""
+    digest = hashlib.sha256()
+    digest.update(tokenizer.backend_tokenizer.to_str().encode("utf-8"))
+    digest.update(
+        json.dumps(
+            tokenizer.special_tokens_map,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    )
+    return digest.hexdigest()
+
 
 MODEL_CONFIGS = {
     "350m": {
@@ -167,11 +183,12 @@ def train_model(
     Sıfırdan LLM eğitimi.
     """
     
-    config_dict = MODEL_CONFIGS.get(model_size)
-    if config_dict is None:
+    preset_config = MODEL_CONFIGS.get(model_size)
+    if preset_config is None:
         print(f"❌ Bilinmeyen model boyutu: {model_size}")
         print(f"   Seçenekler: {list(MODEL_CONFIGS.keys())}")
         return
+    config_dict = dict(preset_config)
     
     if output_dir is None:
         output_dir = f"./checkpoints/llm-{model_size}-tr-en"
@@ -196,11 +213,67 @@ def train_model(
         print("⚠️  CUDA bulunamadı! CPU ile eğitim çok yavaş olacak.")
     
     # ============================================================
+    # TOKENIZER VE DATASET MANIFEST DOĞRULAMA
+    # ============================================================
+    print("\n🔤 Tokenizer yükleniyor...")
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path,
+            local_files_only=True,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "Özel tokenizer yüklenemedi. Tokenized dataset üzerinde GPT-2 "
+            "fallback kullanmak token ID anlamlarını bozar."
+        ) from exc
+    
+    if tokenizer.pad_token is None:
+        if tokenizer.eos_token is None:
+            raise ValueError("Tokenizer pad_token veya eos_token tanımlamalıdır")
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    tokenizer_sha256 = tokenizer_fingerprint(tokenizer)
+    manifest_path = os.path.join(dataset_path, "dataset_manifest.json")
+    if not os.path.exists(manifest_path):
+        raise RuntimeError(
+            "dataset_manifest.json bulunamadı. Dataset'i güncel "
+            "data/tokenize_dataset.py ile yeniden üretin."
+        )
+    
+    with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+        dataset_manifest = json.load(manifest_file)
+    
+    expected_tokenizer_sha = dataset_manifest.get("tokenizer_sha256")
+    if expected_tokenizer_sha != tokenizer_sha256:
+        raise ValueError(
+            "Tokenizer/dataset kimliği uyuşmuyor: "
+            f"dataset={expected_tokenizer_sha}, tokenizer={tokenizer_sha256}"
+        )
+    
+    expected_seq_length = config_dict["seq_length"]
+    actual_seq_length = dataset_manifest.get("seq_length")
+    if actual_seq_length != expected_seq_length:
+        raise ValueError(
+            "Dataset sequence uzunluğu model preset'i ile uyuşmuyor: "
+            f"dataset={actual_seq_length}, model={expected_seq_length}"
+        )
+    
+    # Model vocabulary boyutu tokenizer'dan gelir; sonradan resize edilmez.
+    configured_vocab_size = config_dict["vocab_size"]
+    config_dict["vocab_size"] = len(tokenizer)
+    if configured_vocab_size != len(tokenizer):
+        print(
+            f"  ℹ️ Preset vocab_size {configured_vocab_size:,} → "
+            f"{len(tokenizer):,} olarak tokenizer ile eşitlendi"
+        )
+    print(f"  ✅ Tokenizer: {len(tokenizer):,} token")
+    print(f"  ✅ SHA-256: {tokenizer_sha256}")
+    
+    # ============================================================
     # MODEL OLUŞTUR (sıfırdan — random ağırlıklar)
     # ============================================================
     print("\n📦 Model oluşturuluyor (sıfırdan)...")
     
-    # Flash Attention kontrolü
     try:
         import flash_attn
         attn_impl = "flash_attention_2"
@@ -234,27 +307,6 @@ def train_model(
     print(f"  Eğitilebilir param:  {trainable_params / 1e6:.1f}M")
     
     # ============================================================
-    # TOKENİZER
-    # ============================================================
-    print("\n🔤 Tokenizer yükleniyor...")
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-        print(f"  ✅ Özel tokenizer yüklendi: {tokenizer_path}")
-    except Exception:
-        print("  ⚠️  Özel tokenizer bulunamadı!")
-        print("  → GPT-2 tokenizer kullanılıyor (geçici)")
-        tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    # Vocab boyutu kontrolü
-    if len(tokenizer) != config_dict["vocab_size"]:
-        print(f"  ⚠️  Tokenizer vocab ({len(tokenizer)}) ≠ Config vocab ({config_dict['vocab_size']})")
-        print(f"  → Model config güncelleniyor...")
-        model.resize_token_embeddings(len(tokenizer))
-    
-    # ============================================================
     # VERİ SETİ
     # ============================================================
     print("\n📂 Veri seti yükleniyor...")
@@ -277,6 +329,30 @@ def train_model(
     except Exception:
         eval_dataset = None
         print("  ⚠️  Validation set bulunamadı, eval atlanıyor")
+    
+    # Eğitim lineage manifestini checkpoint dizinine kaydet.
+    os.makedirs(output_dir, exist_ok=True)
+    training_manifest = {
+        "format_version": 1,
+        "model_size": model_size,
+        "model_config": config_dict,
+        "tokenizer_path": os.path.abspath(tokenizer_path),
+        "tokenizer_sha256": tokenizer_sha256,
+        "dataset_path": os.path.abspath(dataset_path),
+        "dataset_manifest": dataset_manifest,
+        "source_commit": os.environ.get("GIT_COMMIT"),
+    }
+    with open(
+        os.path.join(output_dir, "training_manifest.json"),
+        "w",
+        encoding="utf-8",
+    ) as training_manifest_file:
+        json.dump(
+            training_manifest,
+            training_manifest_file,
+            indent=2,
+            ensure_ascii=False,
+        )
     
     # ============================================================
     # EĞİTİM ARGÜMANLARI
