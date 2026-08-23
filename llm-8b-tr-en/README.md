@@ -1,168 +1,92 @@
-# 🧠 Sıfırdan LLM Eğitimi — Türkçe + İngilizce (2 Saat H100)
+# TR-EN LLM Eğitim Pipeline'ı
 
-> **Model:** 350M parametre Dense Transformer (Llama mimarisi)  
-> **Platform:** Google Colab — NVIDIA H100 80GB  
-> **Süre:** ~2 saat  
-> **Diller:** Türkçe (%40) + İngilizce (%55) + Kod (%5)
+> **Durum: experimental pipeline + sınırlı bir trained PoC.** Bu klasördeki `8B` adı tarihsel hedeftir. Commit edilmiş tek koşu özeti **6,082,670,592 parametreli**, 400-step bir H100 denemesine aittir; 350M veya 8B tamamlanmış koşu sonucu değildir.
 
----
+Kök dizindeki [ana README](../README.md), model/deney envanteri ve “trained / experimental / planned” ayrımı için kanonik kaynaktır.
 
-## ⚡ Hızlı Başlangıç (Colab)
+## Kanıtlanan Koşu
 
-**En kolay yol:** `training/colab_setup.py` dosyasını Colab'a yükleyin ve çalıştırın.  
-Bu script her şeyi otomatik yapar: kurulum → veri indirme → tokenizasyon → eğitim → değerlendirme.
+Herkese açık kaynaklar: [`../results/training_info.json`](../results/training_info.json), [`TRAINING_RESULTS.md`](TRAINING_RESULTS.md) ve [`training/colab_setup.py`](training/colab_setup.py).
 
-```
-1. Google Colab'ı açın → Runtime > Change Runtime Type > H100
-2. training/colab_setup.py içeriğini kopyalayın
-3. Çalıştırın ve ~2 saat bekleyin
-4. Model Google Drive'a kaydedilir ✓
-```
+| Metrik | Değer | Not |
+| --- | ---: | --- |
+| Parametre | 6,082,670,592 | `LlamaForCausalLM` config'i |
+| GPU | 1× NVIDIA H100 80GB HBM3 | Koşu özeti |
+| Step | 400 | Kısa PoC bütçesi |
+| İşlenen token | 13,107,200 | `400 × 4 batch × 4 accumulation × 2,048` |
+| Süre | 66.018 dakika | Koşu özeti |
+| Final training loss | 4.78736 | Held-out eval değildir |
+| Training perplexity | ≈119.98 | `exp(4.78736)`; türetilmiş |
+| Ortalama throughput | ≈3,309 token/s | Token / duvar saati; türetilmiş |
+| Eğitim tokenı / parametre | ≈0.00215 | Çok kısa bir smoke/PoC koşusu |
+| Eval, RAM, peak VRAM | Public sonuçta yok | Kalite/kapasite iddiası yapılamaz |
 
----
+Bu metrikler modelin eğitiminin başladığını ve 400 optimizer step tamamlandığını gösterir; kullanılabilir dil modeli kalitesini kanıtlamaz. Model ağırlıkları/checkpoint bu GitHub deposunda yer almıyor.
 
-## 📁 Proje Yapısı
+## Bu Klasördeki İki Ayrı Akış
 
-```
-llm-8b-tr-en/
-├── README.md                          ← Bu dosya
-├── requirements.txt                   ← Python bağımlılıkları
-│
-├── configs/
-│   ├── model_config.json              ← 350M model parametreleri
-│   └── training_config.yaml           ← Eğitim hyperparametreleri
-│
-├── data/
-│   ├── download_datasets.py           ← HuggingFace'den veri çekme
-│   ├── clean_turkish.py               ← Türkçe metin temizleme
-│   ├── dedup.py                       ← MinHash deduplikasyon
-│   ├── tokenize_dataset.py            ← BPE tokenizasyon
-│   └── create_data_mix.py             ← Dil karışım oranları
-│
-├── tokenizer/
-│   └── train_tokenizer.py             ← Özel BPE tokenizer eğitimi
-│
-├── training/
-│   ├── train_from_scratch.py          ← Ana eğitim scripti
-│   └── colab_setup.py                 ← Colab tek-dosya çözümü
-│
-└── evaluation/
-    ├── turkish_bench.py               ← Türkçe kalite testi
-    └── perplexity_eval.py             ← Perplexity ölçümü
-```
+| Akış | Gerçekte ne yapar? | Durum |
+| --- | --- | --- |
+| `training/colab_setup.py` | GPT-2 tokenizer ve yaklaşık 6.08B Llama config'iyle 400-step quick run | Bir sınırlı koşu özeti var |
+| `training/train_from_scratch.py` | `350m`, `1b`, `8b` presetlerini sunan genel pipeline | Bu presetler için ayrı public koşu sonucu yok |
 
----
+350M presetinin varlığı, 350M modelin eğitildiği anlamına gelmez. Aynı şekilde klasör adı 8B olsa da public sonuç 6.08B config içindir.
 
-## 🔧 Adım Adım Kullanım (Yerel / Manuel)
+## Hızlı Başlangıç
 
-### 1. Kütüphane Kurulumu
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Veri İndirme
+Genel pipeline:
+
 ```bash
-# 2 saat H100 için (küçük örneklem)
+# Aşağıdaki presetler için bu depoda ayrı tamamlanmış sonuç yoktur.
+python training/train_from_scratch.py --model-size 350m --no-wandb
+python training/train_from_scratch.py --model-size 1b --no-wandb
+python training/train_from_scratch.py --model-size 8b --no-wandb
+```
+
+Kaydedilmiş kısa koşuya karşılık gelen Colab akışı:
+
+```bash
+python training/colab_setup.py
+```
+
+Script H100/A100, harici veri erişimi ve servis kimlik bilgileri bekler. GitHub, Hugging Face, Kaggle veya WandB tokenlarını kaynak koda yazmayın; ortam değişkenleri ya da Colab Secrets kullanın.
+
+## Veri Akışı
+
+Manuel akış:
+
+```bash
 python data/download_datasets.py --mode quick
-
-# Tam eğitim için (tüm veri)
-python data/download_datasets.py --mode full
-```
-
-### 3. Veri Temizleme
-```bash
 python data/clean_turkish.py --input ./data/raw_dataset --output ./data/cleaned_dataset
-```
-
-### 4. Deduplikasyon
-```bash
 python data/dedup.py --input ./data/cleaned_dataset --output ./data/deduped_dataset
-```
-
-### 5. Tokenizasyon
-```bash
-# Opsiyonel: Özel tokenizer eğit
 python tokenizer/train_tokenizer.py --vocab-size 32000
-
-# Veriyi tokenize et
 python data/tokenize_dataset.py --input ./data/deduped_dataset --output ./data/tokenized_dataset
 ```
 
-### 6. Eğitim
-```bash
-# 350M model (2 saat H100)
-python training/train_from_scratch.py --model-size 350m --no-wandb
+`data/tokenize_dataset.py`, gruplanmış sequence'ları `seed=42` ile %95 train / %5 validation olarak ayırır. `colab_setup.py` quick akışı ise GPT-2 tokenizer kullanır ve ayrı bir özel-tokenizer benchmarkı değildir.
 
-# 1B model (daha fazla GPU süresi gerekir)
-python training/train_from_scratch.py --model-size 1b
+## Mimari — Kaydedilmiş 6.08B Config
 
-# 8B model (60-80 gün, tam eğitim)
-python training/train_from_scratch.py --model-size 8b
-```
+| Alan | Değer |
+| --- | ---: |
+| Vocab | 50,257 |
+| Hidden | 4,096 |
+| Intermediate | 11,008 |
+| Katman | 32 |
+| Attention / KV head | 32 / 8 |
+| Context | 2,048 |
+| Precision | BF16 |
+| Attention | FlashAttention 2 kurulmuşsa onu, aksi halde SDPA |
+| Optimizer | 8-bit AdamW olarak yapılandırılmış |
 
-### 7. Değerlendirme
-```bash
-# Türkçe kalite testi
-python evaluation/turkish_bench.py --model ./checkpoints/llm-350m-tr-en/final_model
+## Bilinen Sınırlar
 
-# Perplexity ölçümü
-python evaluation/perplexity_eval.py --model ./checkpoints/llm-350m-tr-en/final_model
-```
-
----
-
-## 📊 2 Saat H100 ile Beklenen Sonuçlar
-
-| Metrik | Beklenen Değer |
-|--------|---------------|
-| **Model boyutu** | ~350M parametre |
-| **İşlenen token** | ~500M - 1B |
-| **Final loss** | ~3.5 - 5.0 |
-| **Perplexity** | ~30 - 100 |
-| **Türkçe kalitesi** | Temel kelime/cümle oluşturma |
-| **Throughput** | ~50-100K token/sn |
-
-> ⚠️ **Not:** 2 saatlik eğitim bir proof-of-concept'tir. Gerçek kullanılabilir bir model için
-> 8B parametre ve 100B+ token ile haftalarca eğitim gerekir.
-
----
-
-## 🏗️ Model Mimarisi
-
-```
-350M Dense Transformer (Llama tabanlı):
-├── Katman sayısı:       24
-├── Hidden boyutu:       1024
-├── FFN boyutu:          4096
-├── Attention heads:     16
-├── KV heads:            4 (GQA)
-├── Max context:         2048 token
-├── Aktivasyon:          SwiGLU
-├── Normalizasyon:       RMSNorm
-├── Pozisyon encoding:   RoPE
-└── Precision:           BF16
-```
-
----
-
-## 📈 Ölçeklendirme Yol Haritası
-
-| Aşama | Model | GPU | Süre | Token |
-|-------|-------|-----|------|-------|
-| **1. PoC** | 350M | 1x H100, 2 saat | 2 saat | ~1B |
-| **2. Prototip** | 1B | 1x H100, 1-2 hafta | 1-2 hafta | ~10B |
-| **3. Üretim** | 8B | 1x H100, 2-3 ay | 2-3 ay | ~100B |
-| **4. İleri** | 8B MoE | 4-8x H100, 3-6 ay | 3-6 ay | ~500B |
-
----
-
-## 📝 Notlar
-
-- **Tokenizer:** 2 saatlik sürümde GPT-2 tokenizer kullanılır (hız için). Tam projede özel Türkçe tokenizer eğitin.
-- **Veri:** Quick modda Wikipedia-TR ve FineWeb-Edu örneklemleri kullanılır.
-- **Checkpoint:** Google Drive'a kaydedilir, Colab oturumu kapansa bile korunur.
-- **WandB:** Eğitim takibi için `--no-wandb` flag'ini kaldırın ve API key girin.
-
----
-
-*Oluşturulma: Mart 2026 | Platform: H100 80GB*
+- Eski “500M–1B token”, “50–100K token/s” ve benzeri değerler ölçülmüş sonuç değildi; bu README'den çıkarıldı.
+- Public sonuçta eval loss/perplexity, sistem RAM ve peak VRAM yok.
+- Checkpoint/model kartı public olarak doğrulanamıyor.
+- Quick run'daki veri karışımı ve tokenizer, genel pipeline'ın tüm seçeneklerini temsil etmiyor.
+- Kök dizinde açık bir `LICENSE` dosyası yok.
