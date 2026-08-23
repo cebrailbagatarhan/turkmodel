@@ -82,10 +82,28 @@ print("✅ Tüm kütüphaneler kuruldu!")
 
 import os
 
-# Kaggle API ayarları
-os.environ["KAGGLE_USERNAME"] = "cebrailbagatarhan"
-os.environ["KAGGLE_KEY"] = "44c18f944ddc36d2fe6bf50f2ba6b129"
-print("✅ Kaggle API ayarlandı")
+def get_secret(name: str):
+    """Ortam değişkeni veya Colab Secrets içinden bir değer oku."""
+    value = os.getenv(name)
+    if value:
+        return value
+
+    try:
+        from google.colab import userdata
+        return userdata.get(name)
+    except Exception:
+        return None
+
+
+# Kaggle API ayarları — değerleri kaynak koda yazmayın.
+kaggle_username = get_secret("KAGGLE_USERNAME")
+kaggle_key = get_secret("KAGGLE_KEY")
+if kaggle_username and kaggle_key:
+    os.environ["KAGGLE_USERNAME"] = kaggle_username
+    os.environ["KAGGLE_KEY"] = kaggle_key
+    print("✅ Kaggle API ayarlandı")
+else:
+    print("⚠️  KAGGLE_USERNAME/KAGGLE_KEY bulunamadı; Kaggle adımları başarısız olabilir.")
 
 
 # ============================================================
@@ -451,7 +469,10 @@ try:
     from huggingface_hub import HfApi, login
     
     # HuggingFace token ile otomatik giriş
-    HF_TOKEN = "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"
+    HF_TOKEN = get_secret("HF_TOKEN")
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN bulunamadı; ortam değişkeni veya Colab Secrets kullanın.")
+
     print("📝 HuggingFace Hub'a giriş yapılıyor...")
     login(token=HF_TOKEN)
     
@@ -487,10 +508,25 @@ print("\n" + "=" * 60)
 print("📦 BÖLÜM 11: GitHub'a Push")
 print("=" * 60)
 
-GITHUB_TOKEN = "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"
-GITHUB_REPO = f"https://{GITHUB_TOKEN}@github.com/cebrailbagatarhan/turkmodel.git"
+GITHUB_TOKEN = get_secret("GITHUB_TOKEN")
+GITHUB_REPO = "https://github.com/cebrailbagatarhan/turkmodel.git"
 
 try:
+    if not GITHUB_TOKEN:
+        raise RuntimeError("GITHUB_TOKEN bulunamadı; GitHub push atlanıyor.")
+
+    # Tokenı clone URL'sine veya .git/config dosyasına yazmadan Git'e ilet.
+    import base64
+    basic_auth = base64.b64encode(
+        f"x-access-token:{GITHUB_TOKEN}".encode("utf-8")
+    ).decode("ascii")
+    git_env = os.environ.copy()
+    git_env.update({
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "http.extraHeader",
+        "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {basic_auth}",
+    })
+
     # Git kurulumu
     subprocess.run(["git", "config", "--global", "user.email", "cebrailbagatarhan@users.noreply.github.com"], check=False)
     subprocess.run(["git", "config", "--global", "user.name", "cebrailbagatarhan"], check=False)
@@ -501,7 +537,7 @@ try:
         import shutil
         shutil.rmtree(REPO_DIR)
     
-    subprocess.run(["git", "clone", GITHUB_REPO, REPO_DIR], check=True)
+    subprocess.run(["git", "clone", GITHUB_REPO, REPO_DIR], check=True, env=git_env)
     
     # training_info.json ve eval sonuçlarını kopyala (küçük dosyalar)
     import shutil
@@ -552,7 +588,7 @@ Model ayrıca Google Drive'da da kaydedildi:
     subprocess.run(["git", "-C", REPO_DIR, "commit", "-m",
                      f"Egitim sonuclari - {total_params/1e6:.0f}M model - {MAX_STEPS} steps"],
                     check=True)
-    subprocess.run(["git", "-C", REPO_DIR, "push"], check=True)
+    subprocess.run(["git", "-C", REPO_DIR, "push"], check=True, env=git_env)
     
     print(f"  ✅ GitHub'a push edildi: {GITHUB_REPO}")
     print(f"  📄 Sonuçlar: results/training_info.json")
