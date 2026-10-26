@@ -1,0 +1,22 @@
+name: Evaluation summary tests
+on:
+  push:
+    paths:
+      - 'llm-8b-tr-en/evaluation/report_summary.py'
+      - 'llm-8b-tr-en/evaluation/test_report_summary.py'
+      - '.github/workflows/evaluation-summary.yml'
+  pull_request:
+    paths:
+      - 'llm-8b-tr-en/evaluation/report_summary.py'
+      - 'llm-8b-tr-en/evaluation/test_report_summary.py'
+      - '.github/workflows/evaluation-summary.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s llm-8b-tr-en/evaluation -p 'test_report_summary.py' -v
+      - run: python -m py_compile llm-8b-tr-en/evaluation/report_summary.py llm-8b-tr-en/evaluation/test_report_summary.py
