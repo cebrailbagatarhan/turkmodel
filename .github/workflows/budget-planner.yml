@@ -1,0 +1,24 @@
+name: Offline training budget tests
+
+on:
+  pull_request:
+    paths:
+      - 'llm-8b-tr-en/training/budget_planner.py'
+      - 'tests/test_budget_planner.py'
+      - '.github/workflows/budget-planner.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run offline tests
+        run: python -m unittest discover -s tests -p test_budget_planner.py -v
+      - name: Check syntax
+        run: python -m py_compile llm-8b-tr-en/training/budget_planner.py tests/test_budget_planner.py
