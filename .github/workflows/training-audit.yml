@@ -1,0 +1,29 @@
+name: Training metadata audit
+
+on:
+  pull_request:
+    paths:
+      - "results/training_audit.py"
+      - "results/training_info.json"
+      - "tests/test_training_audit.py"
+      - ".github/workflows/training-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python syntax
+        run: python -m compileall -q results/training_audit.py tests/test_training_audit.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Audit checked-in run
+        run: python results/training_audit.py --json
