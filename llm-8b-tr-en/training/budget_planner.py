@@ -6,6 +6,7 @@ Example:
 
 Throughput is an optional user-supplied cluster-wide measurement, not a
 hardware prediction. Estimates assume full sequences without padding.
+Optional overhead is only for time not already reflected in throughput.
 No models, datasets, services or credentials are accessed.
 """
 from __future__ import annotations
@@ -37,7 +38,7 @@ def nonnegative_float(raw: str) -> float:
 
 def plan(*, steps: int, micro_batch: int, grad_accum: int, seq_len: int,
          gpus: int = 1, tokens_per_second: float | None = None,
-         gpu_hour_price: float | None = None) -> dict:
+         gpu_hour_price: float | None = None, overhead_percent: float = 0.0) -> dict:
     if any(type(n) is not int or n <= 0 for n in (steps, micro_batch, grad_accum, seq_len, gpus)):
         raise ValueError("steps, micro_batch, grad_accum, seq_len and gpus must be positive integers")
     if tokens_per_second is not None and (not math.isfinite(tokens_per_second) or tokens_per_second <= 0):
@@ -46,10 +47,12 @@ def plan(*, steps: int, micro_batch: int, grad_accum: int, seq_len: int,
         raise ValueError("gpu_hour_price must be finite and non-negative")
     if gpu_hour_price is not None and tokens_per_second is None:
         raise ValueError("gpu_hour_price requires measured tokens_per_second")
+    if type(overhead_percent) not in (int, float) or not math.isfinite(overhead_percent) or not 0 <= overhead_percent <= 100:
+        raise ValueError("overhead_percent must be a finite number between 0 and 100")
 
     per_step = micro_batch * grad_accum * seq_len * gpus
     total = per_step * steps
-    hours = total / tokens_per_second / 3600 if tokens_per_second is not None else None
+    hours = total / tokens_per_second / 3600 * (1 + overhead_percent / 100) if tokens_per_second is not None else None
     return {
         "tokens_per_optimizer_step": per_step,
         "planned_tokens": total,
@@ -57,7 +60,9 @@ def plan(*, steps: int, micro_batch: int, grad_accum: int, seq_len: int,
         "estimated_gpu_hours": hours * gpus if hours is not None else None,
         "estimated_cost": hours * gpus * gpu_hour_price
         if hours is not None and gpu_hour_price is not None else None,
-        "assumptions": "Full-length unpadded sequences; measured cluster-wide throughput; no overhead adjustment.",
+        "overhead_percent": overhead_percent,
+        "assumptions": "Full-length unpadded sequences; measured cluster-wide throughput; "
+        + (f"{overhead_percent:g}% additional time overhead." if overhead_percent else "no overhead adjustment."),
     }
 
 
@@ -70,12 +75,14 @@ def main() -> None:
     parser.add_argument("--gpus", type=positive_int, default=1)
     parser.add_argument("--tokens-per-second", type=nonnegative_float)
     parser.add_argument("--gpu-hour-price", type=nonnegative_float)
+    parser.add_argument("--overhead-percent", type=nonnegative_float, default=0.0,
+                        help="Additional unmodeled time overhead, 0-100 percent")
     args = parser.parse_args()
     try:
         result = plan(steps=args.steps, micro_batch=args.micro_batch,
                       grad_accum=args.grad_accum, seq_len=args.seq_len,
                       gpus=args.gpus, tokens_per_second=args.tokens_per_second,
-                      gpu_hour_price=args.gpu_hour_price)
+                      gpu_hour_price=args.gpu_hour_price, overhead_percent=args.overhead_percent)
     except ValueError as exc:
         parser.error(str(exc))
     print(json.dumps(result, indent=2))
