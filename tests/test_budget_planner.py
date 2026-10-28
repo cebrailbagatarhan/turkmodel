@@ -62,5 +62,41 @@ class BudgetPlannerTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
 
 
+    def test_overhead_adjusts_time_gpu_hours_and_cost_not_tokens(self):
+        result = budget_planner.plan(steps=1, micro_batch=1, grad_accum=1,
+                                     seq_len=3600, gpus=2, tokens_per_second=2,
+                                     gpu_hour_price=3, overhead_percent=25)
+        self.assertEqual(result["planned_tokens"], 7200)
+        self.assertEqual(result["estimated_wall_hours"], 1.25)
+        self.assertEqual(result["estimated_gpu_hours"], 2.5)
+        self.assertEqual(result["estimated_cost"], 7.5)
+
+    def test_default_overhead_preserves_existing_estimates(self):
+        result = budget_planner.plan(steps=1, micro_batch=1, grad_accum=1,
+                                     seq_len=3600, tokens_per_second=1,
+                                     gpu_hour_price=2)
+        self.assertEqual(result["estimated_wall_hours"], 1)
+        self.assertEqual(result["estimated_cost"], 2)
+        self.assertEqual(result["overhead_percent"], 0)
+
+    def test_invalid_overhead_rejected(self):
+        for value in (-1, 101, math.nan, math.inf, True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                budget_planner.plan(steps=1, micro_batch=1, grad_accum=1,
+                                    seq_len=1, overhead_percent=value)
+
+    def test_cli_overhead_and_invalid_limit(self):
+        command = [sys.executable, str(SCRIPT), "--steps", "1",
+                   "--micro-batch", "1", "--grad-accum", "1",
+                   "--seq-len", "3600", "--tokens-per-second", "1"]
+        valid = subprocess.run(command + ["--overhead-percent", "20"],
+                               capture_output=True, text=True)
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertIn('"estimated_wall_hours": 1.2', valid.stdout)
+        invalid = subprocess.run(command + ["--overhead-percent", "101"],
+                                 capture_output=True, text=True)
+        self.assertNotEqual(invalid.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
