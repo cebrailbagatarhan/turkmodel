@@ -62,6 +62,31 @@ class TrainingAuditTests(unittest.TestCase):
         )
         self.assertEqual(json.loads(result.stdout), report)
 
+    def test_cli_coverage_gate_passes_and_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            path.write_text(json.dumps(SAMPLE), encoding="utf-8")
+            command = [sys.executable, str(ROOT / "results" / "training_audit.py"),
+                       str(path), "--json", "--min-tokens-per-parameter"]
+            passing = subprocess.run(command + ["0.8"], capture_output=True, text=True)
+            self.assertEqual(passing.returncode, 0, passing.stderr)
+            self.assertEqual(json.loads(passing.stdout)["coverage_check"],
+                             {"minimum_tokens_per_parameter": 0.8, "passed": True})
+            failing = subprocess.run(command + ["0.9"], capture_output=True, text=True)
+            self.assertEqual(failing.returncode, 1)
+            self.assertFalse(json.loads(failing.stdout)["coverage_check"]["passed"])
+            self.assertIn("below", failing.stderr)
+
+    def test_cli_rejects_invalid_coverage_thresholds(self):
+        script = str(ROOT / "results" / "training_audit.py")
+        for threshold in ("-1", "nan", "inf", "-inf", "oops"):
+            with self.subTest(threshold=threshold):
+                completed = subprocess.run(
+                    [sys.executable, script, f"--min-tokens-per-parameter={threshold}"],
+                    capture_output=True, text=True)
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("finite non-negative", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

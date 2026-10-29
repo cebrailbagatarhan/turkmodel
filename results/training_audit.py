@@ -2,6 +2,7 @@
 
 Usage:
     python results/training_audit.py [path/to/training_info.json] [--json]
+        [--min-tokens-per-parameter RATIO]
 
 Derived metrics describe the recorded training run, not held-out model quality.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 
@@ -30,6 +32,16 @@ def _finite_number(record: dict, key: str, *, positive: bool = True) -> float:
     if value <= 0 if positive else value < 0:
         raise ValueError(f"{key} must be {'positive' if positive else 'non-negative'}")
     return float(value)
+
+
+def nonnegative_finite(raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a finite non-negative number") from exc
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("must be a finite non-negative number")
+    return value
 
 
 def audit_record(record: dict) -> dict:
@@ -68,11 +80,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", nargs="?", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--json", action="store_true", help="print machine-readable metrics")
+    parser.add_argument("--min-tokens-per-parameter", type=nonnegative_finite,
+                        help="fail if recorded training tokens per parameter fall below this ratio")
     args = parser.parse_args(argv)
     try:
         report = audit_file(args.path)
     except ValueError as exc:
         parser.exit(1, f"Training audit failed: {exc}\n")
+    passed = True
+    if args.min_tokens_per_parameter is not None:
+        actual = report["derived"]["tokens_per_parameter"]
+        passed = actual >= args.min_tokens_per_parameter
+        report["coverage_check"] = {
+            "minimum_tokens_per_parameter": args.min_tokens_per_parameter,
+            "passed": passed,
+        }
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -81,6 +103,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Final training loss (not validation): {report['final_training_loss']:.5f}")
         print(f"Derived tokens/s: {report['derived']['tokens_per_second']:.2f}")
         print(f"Derived tokens/parameter: {report['derived']['tokens_per_parameter']:.6f}")
+    if not passed:
+        print("Training coverage below --min-tokens-per-parameter threshold", file=sys.stderr)
+        return 1
     return 0
 
 
