@@ -82,7 +82,7 @@ class TrainingAuditTests(unittest.TestCase):
         for threshold in ("-1", "nan", "inf", "-inf", "oops"):
             with self.subTest(threshold=threshold):
                 completed = subprocess.run(
-                    [sys.executable, script, "--min-tokens-per-parameter", threshold],
+                    [sys.executable, script, f"--min-tokens-per-parameter={threshold}"],
                     capture_output=True, text=True)
                 self.assertNotEqual(completed.returncode, 0)
                 self.assertIn("finite non-negative", completed.stderr)
