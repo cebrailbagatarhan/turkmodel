@@ -100,6 +100,20 @@ python training/colab_setup.py
 
 Script; H100/A100, veri erişimi ve harici servis kimlik bilgileri bekler. API tokenlarını kaynak koda yazmayın; ortam değişkenleri veya Colab Secrets kullanın.
 
+## Eğitim Token Kapsamı Eşiği (Çevrimdışı)
+
+Kaydedilmiş eğitim metadata'sındaki token/parametre oranını isteğe bağlı bir
+alt sınırla denetlemek için:
+
+```bash
+python results/training_audit.py --min-tokens-per-parameter 0.01 --json
+```
+
+Oran eşikten küçükse komut `1`, eşit veya büyükse `0` koduyla çıkar;
+`coverage_check` alanı JSON çıktısında sonucu gösterir. Eşik verilmezse
+önceki rapor biçimi ve çıkış davranışı değişmez. Bu oran yalnızca eğitim
+kapsamını ölçer; held-out doğrulama veya model kalitesi göstergesi değildir.
+
 ## Sonuçları “trained” Olarak Yayınlama Kontrol Listesi
 
 Yeni bir koşuyu tabloya eklemeden önce:
